@@ -9,7 +9,7 @@ import os
 
 from tensorpack.callbacks.saver import ModelSaver
 from tensorpack.tfutils.sessinit import SaverRestore
-from tensorpack.train.interface import AutoResumeTrainConfig
+from tensorpack.train import AutoResumeTrainConfig
 from tensorpack.train.interface import launch_train_with_config
 from tensorpack.train.trainers import SyncMultiGPUTrainerReplicated
 from tensorpack.utils import logger
@@ -45,17 +45,20 @@ def train(args, logdir):
         ],
         max_epoch=hp.train1.num_epochs,
         steps_per_epoch=hp.train1.steps_per_epoch,
-        # session_config=session_conf
+        session_config=session_conf
     )
     ckpt = '{}/{}'.format(logdir, args.ckpt) if args.ckpt else tf.train.latest_checkpoint(logdir)
+    num_gpu = hp.train1.num_gpu
+    
     if ckpt:
         train_conf.session_init = SaverRestore(ckpt)
 
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
         train_conf.nr_tower = len(args.gpu.split(','))
+        num_gpu = len(args.gpu.split(','))
 
-    trainer = SyncMultiGPUTrainerReplicated(hp.train1.num_gpu)
+    trainer = SyncMultiGPUTrainerReplicated(num_gpu)
 
     launch_train_with_config(train_conf, trainer=trainer)
 
@@ -63,8 +66,8 @@ def train(args, logdir):
 def get_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('case', type=str, help='experiment case name')
-    parser.add_argument('-ckpt', help='checkpoint to load model.')
     parser.add_argument('-gpu', help='comma separated list of GPU(s) to use.')
+    parser.add_argument('-ckpt', help='checkpoint to load model.')
     arguments = parser.parse_args()
     return arguments
 
