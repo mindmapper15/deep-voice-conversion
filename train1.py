@@ -9,7 +9,7 @@ import os
 
 from tensorpack.callbacks.saver import ModelSaver
 from tensorpack.tfutils.sessinit import SaverRestore
-from tensorpack.train.interface import TrainConfig
+from tensorpack.train.interface import AutoResumeTrainConfig
 from tensorpack.train.interface import launch_train_with_config
 from tensorpack.train.trainers import SyncMultiGPUTrainerReplicated
 from tensorpack.utils import logger
@@ -36,7 +36,7 @@ def train(args, logdir):
             allow_growth=True,
         ),)
 
-    train_conf = TrainConfig(
+    train_conf = AutoResumeTrainConfig(
         model=model,
         data=QueueInput(df(n_prefetch=1000, n_thread=4)),
         callbacks=[
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     hp.set_hparam_yaml(args.case)
     logdir_train1 = '{}/train1'.format(hp.logdir)
 
-    print('case: {}, logdir: {}'.format(args.case1, args.case, logdir_train1))
+    print('case: {}, logdir: {}'.format(args.case, logdir_train1))
 
     train(args, logdir=logdir_train1)
 
