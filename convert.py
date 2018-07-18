@@ -6,11 +6,13 @@ from __future__ import print_function
 
 import argparse
 
+from PIL import Image
 from models import Net2
 import numpy as np
 from audio import spec2wav, inv_preemphasis, db2amp, denormalize_db
 import datetime
 import tensorflow as tf
+from scipy.io import wavfile
 from hparam import hparam as hp
 from data_load import Net2DataFlow
 from tensorpack.predict.base import OfflinePredictor
@@ -95,6 +97,9 @@ def do_convert(args, logdir1, logdir2):
         session_inits.append(SaverRestore(ckpt2))
     if ckpt1:
         session_inits.append(SaverRestore(ckpt1, ignore=['global_step']))
+    if args.gpu:
+        os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+        
     pred_conf = PredictConfig(
         model=model,
         input_names=get_eval_input_names(),
@@ -104,6 +109,17 @@ def do_convert(args, logdir1, logdir2):
 
     audio, y_audio, ppgs = convert(predictor, df)
 
+    # Saving voice-converted audio to 32-bit float wav file
+    audio = np.squeeze(audio, axis=0).astype(np.float32)
+    wavfile.write("./result/output_audio.wav",hp.default.sr, audio)
+
+    # Saving PPGS array to 8-bit Grayscale Image
+    ppgs = np.squeeze(ppgs, axis=0)
+    ppgs = (ppgs*255/np.max(ppgs)).astype('uint8')
+    ppgs = Image.fromarray(ppgs)
+    ppgs.save('./result/output_ppgs.png')
+
+    """
     # Write the result
     tf.summary.audio('A', y_audio, hp.default.sr, max_outputs=hp.convert.batch_size)
     tf.summary.audio('B', audio, hp.default.sr, max_outputs=hp.convert.batch_size)
@@ -126,13 +142,14 @@ def do_convert(args, logdir1, logdir2):
     #         per_process_gpu_memory_fraction=0.6
     #     ),
     # )
-
+    """
 
 def get_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('case1', type=str, help='experiment case name of train1')
     parser.add_argument('case2', type=str, help='experiment case name of train2')
     parser.add_argument('-ckpt', help='checkpoint to load model.')
+    parser.add_argument('-gpu', help='comma separated list of GPU(s) to use.')
     arguments = parser.parse_args()
     return arguments
 
