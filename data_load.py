@@ -130,9 +130,11 @@ def get_mfccs_and_spectrogram(wav_file, trim=True, random_crop=False):
     if random_crop:
         wav = wav_random_crop(wav, hp.default.sr, hp.default.duration)
 
+    """
     # Padding or crop
     length = hp.default.sr * hp.default.duration
     wav = librosa.util.fix_length(wav, length)
+    """
 
     return _get_mfcc_and_spec(wav, hp.default.preemphasis, hp.default.n_fft, hp.default.win_length, hp.default.hop_length)
 

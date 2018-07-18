@@ -43,8 +43,8 @@ from tensorpack.callbacks.base import Callback
 #             # tf.summary.audio('B', audio, hp.default.sr, max_outputs=hp.convert.batch_size)
 
 
-def convert(predictor, df):
-    pred_spec, y_spec, ppgs = predictor(next(df().get_data()))
+def convert(predictor, df, input_name):
+    pred_spec, y_spec, ppgs = predictor(next(df().get_data_for_convert(input_name)))
 
     # Denormalizatoin
     pred_spec = denormalize_db(pred_spec, hp.default.max_db, hp.default.min_db)
@@ -88,7 +88,7 @@ def do_convert(args, logdir1, logdir2):
     # Load graph
     model = Net2()
 
-    df = Net2DataFlow(hp.convert.data_path, hp.convert.batch_size)
+    df = Net2DataFlow("", 1)
 
     ckpt1 = tf.train.latest_checkpoint(logdir1)
     ckpt2 = '{}/{}'.format(logdir2, args.ckpt) if args.ckpt else tf.train.latest_checkpoint(logdir2)
@@ -107,7 +107,7 @@ def do_convert(args, logdir1, logdir2):
         session_init=ChainInit(session_inits))
     predictor = OfflinePredictor(pred_conf)
 
-    audio, y_audio, ppgs = convert(predictor, df)
+    audio, y_audio, ppgs = convert(predictor, df, args.input)
 
     # Saving voice-converted audio to 32-bit float wav file
     audio = np.squeeze(audio, axis=0).astype(np.float32)
@@ -146,6 +146,7 @@ def do_convert(args, logdir1, logdir2):
 
 def get_arguments():
     parser = argparse.ArgumentParser()
+    parser.add_argument('input', type=str, help='Input audio file name')
     parser.add_argument('case1', type=str, help='experiment case name of train1')
     parser.add_argument('case2', type=str, help='experiment case name of train2')
     parser.add_argument('-ckpt', help='checkpoint to load model.')
