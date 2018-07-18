@@ -42,6 +42,9 @@ class Net2DataFlow(DataFlow):
             wav_file = random.choice(self.wav_files)
             yield get_mfccs_and_spectrogram(wav_file)
 
+    def get_data_for_convert(wav_file_name)
+        yield get_mfccs_and_spectrogram(wav_file_name)
+
 
 def load_data(mode):
     wav_files = glob.glob(getattr(hp, mode).data_path)
@@ -79,7 +82,7 @@ def get_mfccs_and_phones(wav_file, trim=False, random_crop=True):
     num_timesteps = mfccs.shape[0]
 
     # phones (targets)
-    phn_file = wav_file.replace("WAV.wav", "PHN").replace("wav", "PHN")
+    phn_file = wav_file.replace("WAV", "PHN")
     phn2idx, idx2phn = load_vocab()
     phns = np.zeros(shape=(num_timesteps,))
     bnd_list = []
