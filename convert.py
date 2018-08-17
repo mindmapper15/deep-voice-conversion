@@ -5,16 +5,18 @@
 from __future__ import print_function
 
 import argparse
+import os
 
 from PIL import Image
-from models import Net2
+from models import Net2ForConvert
 import numpy as np
 from audio import spec2wav, inv_preemphasis, db2amp, denormalize_db
 import datetime
 import tensorflow as tf
-from scipy.io import wavfile
+from librosa.output import write_wav
+from librosa.core import load
 from hparam import hparam as hp
-from data_load import Net2DataFlow
+from data_load import DataFlowForConvert
 from tensorpack.predict.base import OfflinePredictor
 from tensorpack.predict.config import PredictConfig
 from tensorpack.tfutils.sessinit import SaverRestore
@@ -43,30 +45,41 @@ from tensorpack.callbacks.base import Callback
 #             # tf.summary.audio('B', audio, hp.default.sr, max_outputs=hp.convert.batch_size)
 
 
-def convert(predictor, df, input_name):
-    pred_spec, y_spec, ppgs = predictor(next(df().get_data_for_convert(input_name)))
+def convert(predictor, df):
+    pred_spec, y_spec, ppgs = predictor(next(df().get_data()))
 
     # Denormalizatoin
     pred_spec = denormalize_db(pred_spec, hp.default.max_db, hp.default.min_db)
-    y_spec = denormalize_db(y_spec, hp.default.max_db, hp.default.min_db)
+    #y_spec = denormalize_db(y_spec, hp.default.max_db, hp.default.min_db)
 
     # Db to amp
     pred_spec = db2amp(pred_spec)
-    y_spec = db2amp(y_spec)
+    #y_spec = db2amp(y_spec)
 
     # Emphasize the magnitude
     pred_spec = np.power(pred_spec, hp.convert.emphasis_magnitude)
-    y_spec = np.power(y_spec, hp.convert.emphasis_magnitude)
+    #y_spec = np.power(y_spec, hp.convert.emphasis_magnitude)
+
+    audio = []
+    y_audio = []
 
     # Spectrogram to waveform
+    audio.append(spec2wav(pred_spec[0].T, hp.default.n_fft, hp.default.win_length, hp.default.hop_length, 256))
+    #y_audio.append(spec2wavfaster(y_spec[i].T, hp.default.n_fft, hp.default.win_length, hp.default.hop_length, 256))
+    
+    audio = np.array(audio)
+    #y_audio = np.array(y_audio)
+
+
+    """
     audio = np.array(map(lambda spec: spec2wav(spec.T, hp.default.n_fft, hp.default.win_length, hp.default.hop_length,
                                                hp.default.n_iter), pred_spec))
     y_audio = np.array(map(lambda spec: spec2wav(spec.T, hp.default.n_fft, hp.default.win_length, hp.default.hop_length,
                                                  hp.default.n_iter), y_spec))
-
+    """
     # Apply inverse pre-emphasis
     audio = inv_preemphasis(audio, coeff=hp.default.preemphasis)
-    y_audio = inv_preemphasis(y_audio, coeff=hp.default.preemphasis)
+    #y_audio = inv_preemphasis(y_audio, coeff=hp.default.preemphasis)
 
     # if hp.convert.one_full_wav:
     #     # Concatenate to a wav
@@ -84,11 +97,12 @@ def get_eval_output_names():
     return ['pred_spec', 'y_spec', 'ppgs']
 
 
-def do_convert(args, logdir1, logdir2):
+def do_convert(args, logdir1, logdir2, input_name):
     # Load graph
-    model = Net2()
-
-    df = Net2DataFlow("", 1)
+    
+    df = DataFlowForConvert(input_name)
+    input_wav, _ = load(input_name, sr=hp.default.sr, mono=True)
+    model = Net2ForConvert(input_wav.shape[0])
 
     ckpt1 = tf.train.latest_checkpoint(logdir1)
     ckpt2 = '{}/{}'.format(logdir2, args.ckpt) if args.ckpt else tf.train.latest_checkpoint(logdir2)
@@ -107,17 +121,17 @@ def do_convert(args, logdir1, logdir2):
         session_init=ChainInit(session_inits))
     predictor = OfflinePredictor(pred_conf)
 
-    audio, y_audio, ppgs = convert(predictor, df, args.input)
+    audio, y_audio, ppgs = convert(predictor, df)
 
     # Saving voice-converted audio to 32-bit float wav file
     audio = np.squeeze(audio, axis=0).astype(np.float32)
-    wavfile.write("./result/output_audio.wav",hp.default.sr, audio)
+    write_wav(path="./output_audio.wav",y=audio,sr=hp.default.sr)
 
     # Saving PPGS array to 8-bit Grayscale Image
     ppgs = np.squeeze(ppgs, axis=0)
     ppgs = (ppgs*255/np.max(ppgs)).astype('uint8')
     ppgs = Image.fromarray(ppgs)
-    ppgs.save('./result/output_ppgs.png')
+    ppgs.save('./output_ppgs.png')
 
     """
     # Write the result
@@ -146,7 +160,6 @@ def do_convert(args, logdir1, logdir2):
 
 def get_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('input', type=str, help='Input audio file name')
     parser.add_argument('case1', type=str, help='experiment case name of train1')
     parser.add_argument('case2', type=str, help='experiment case name of train2')
     parser.add_argument('-ckpt', help='checkpoint to load model.')
@@ -161,11 +174,13 @@ if __name__ == '__main__':
     logdir_train1 = '{}/{}/train1'.format(hp.logdir_path, args.case1)
     logdir_train2 = '{}/{}/train2'.format(hp.logdir_path, args.case2)
 
-    print('case1: {}, case2: {}, logdir1: {}, logdir2: {}'.format(args.case1, args.case2, logdir_train1, logdir_train2))
+    input_audio_file_name = input("Write your audio file\'s path for converting : ")
+    
+    #print('case1: {}, case2: {}, logdir1: {}, logdir2: {}'.format(args.case1, args.case2, logdir_train1, logdir_train2))
 
     s = datetime.datetime.now()
 
-    do_convert(args, logdir1=logdir_train1, logdir2=logdir_train2)
+    do_convert(args, logdir1=logdir_train1, logdir2=logdir_train2, input_name=input_audio_file_name)
 
     e = datetime.datetime.now()
     diff = e - s

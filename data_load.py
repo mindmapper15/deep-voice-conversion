@@ -13,6 +13,25 @@ from audio import read_wav, preemphasis, amp2db
 from hparam import hparam as hp
 from utils import normalize_0_1
 
+class DataFlowForConvert(RNGDataFlow):
+
+    def __init__(self, data_path):
+        self.wav_file = data_path
+        self.batch_size = 1
+
+    def __call__(self, n_prefetch=1000, n_thread=1):
+        df = self
+        df = BatchData(df, 1)
+        df = PrefetchData(df, n_prefetch, n_thread)
+        return df
+
+    def get_data(self):
+        x = 0
+        while True:
+            x = x + 1
+            print("iter : ", x)
+            yield get_mfccs_and_spectrogram(self.wav_file, isConverting=True)
+        
 
 class DataFlow(RNGDataFlow):
 
@@ -42,15 +61,12 @@ class Net2DataFlow(DataFlow):
             wav_file = random.choice(self.wav_files)
             yield get_mfccs_and_spectrogram(wav_file)
 
-    def get_data_for_convert(wav_file_name)
-        yield get_mfccs_and_spectrogram(wav_file_name)
-
-
+"""
 def load_data(mode):
     wav_files = glob.glob(getattr(hp, mode).data_path)
 
     return wav_files
-
+"""
 
 def wav_random_crop(wav, sr, duration):
     assert (wav.ndim <= 2)
@@ -115,14 +131,15 @@ def get_mfccs_and_phones(wav_file, trim=False, random_crop=True):
     return mfccs, phns
 
 
-def get_mfccs_and_spectrogram(wav_file, trim=True, random_crop=False):
+def get_mfccs_and_spectrogram(wav_file, trim=True, random_crop=False, isConverting=False):
     '''This is applied in `train2`, `test2` or `convert` phase.
     '''
 
 
     # Load
     wav, _ = librosa.load(wav_file, sr=hp.default.sr)
-
+    print("wav's length : ", wav.shape[0])
+    
     # Trim
     if trim:
         wav, _ = librosa.effects.trim(wav, frame_length=hp.default.win_length, hop_length=hp.default.hop_length)
@@ -130,11 +147,11 @@ def get_mfccs_and_spectrogram(wav_file, trim=True, random_crop=False):
     if random_crop:
         wav = wav_random_crop(wav, hp.default.sr, hp.default.duration)
 
-    """
-    # Padding or crop
-    length = hp.default.sr * hp.default.duration
-    wav = librosa.util.fix_length(wav, length)
-    """
+    
+    # Padding or crop if not Converting
+    if isConverting is False:
+        length = int(hp.default.sr * hp.default.duration)
+        wav = librosa.util.fix_length(wav, length)
 
     return _get_mfcc_and_spec(wav, hp.default.preemphasis, hp.default.n_fft, hp.default.win_length, hp.default.hop_length)
 
@@ -161,6 +178,7 @@ def _get_mfcc_and_spec(wav, preemphasis_coeff, n_fft, win_length, hop_length):
     # Normalization (0 ~ 1)
     mag_db = normalize_0_1(mag_db, hp.default.max_db, hp.default.min_db)
     mel_db = normalize_0_1(mel_db, hp.default.max_db, hp.default.min_db)
+    #print(mfccs.T.shape)
 
     return mfccs.T, mag_db.T, mel_db.T  # (t, n_mfccs), (t, 1+n_fft/2), (t, n_mels)
 

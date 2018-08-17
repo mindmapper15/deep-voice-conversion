@@ -160,6 +160,35 @@ def wav2spec(wav, n_fft, win_length, hop_length, time_first=True):
 
     return mag, phase
 
+def spec2wavfaster(mag, n_fft, win_length, hop_length, num_iters=30, phase=None, alpha=None):
+    
+    assert (num_iters > 0)
+
+    if phase is None:
+        phase = np.pi * np.random.rand(*mag.shape)
+
+    if alpha is None:
+        alpha = 0.99
+
+    # initialize c0
+    # phase = <c0, stft = c0
+    phase_before = copy.deepcopy(phase)
+    stft = mag * np.exp(1j * phase)
+    stft_before = mag * np.exp(1j*phase)
+    wav = None
+    
+    for i in range(num_iters):
+        wav = ((1+alpha)*librosa.istft(stft, win_length=win_length, hop_length=hop_length)) - alpha*librosa.istft(stft_before, win_length=win_length, hop_length=hop_length)
+        if i != num_iters - 1:
+            phase_before = copy.deepcopy(phase)
+            stft = librosa.stft(wav, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
+            _, phase = librosa.magphase(stft)
+            phase = np.angle(phase)
+            stft = mag * np.exp(1j * phase)
+            stft_before = mag * np.exp(1j * phase_before)
+            
+    return wav
+
 
 def spec2wav(mag, n_fft, win_length, hop_length, num_iters=30, phase=None):
     """
@@ -190,22 +219,27 @@ def spec2wav(mag, n_fft, win_length, hop_length, num_iters=30, phase=None):
     -------
     wav : np.ndarray [shape=(n,)]
         The real-valued waveform.
-
     """
+    # assert문 : 해당 문에 있는 조건을 만족하지 않을 시, 에러를 발생시키는 코드
     assert (num_iters > 0)
+
     if phase is None:
         phase = np.pi * np.random.rand(*mag.shape)
-    stft = mag * np.exp(1.j * phase)
+
+    # initialize c0
+    # phase = <c0, stft = c0
+    stft = mag * np.exp(1j * phase)
     wav = None
+    
     for i in range(num_iters):
         wav = librosa.istft(stft, win_length=win_length, hop_length=hop_length)
         if i != num_iters - 1:
             stft = librosa.stft(wav, n_fft=n_fft, win_length=win_length, hop_length=hop_length)
             _, phase = librosa.magphase(stft)
             phase = np.angle(phase)
-            stft = mag * np.exp(1.j * phase)
+            stft = mag * np.exp(1j * phase)
+            
     return wav
-
 
 def preemphasis(wav, coeff=0.97):
     """
