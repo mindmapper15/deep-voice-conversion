@@ -26,10 +26,7 @@ class DataFlowForConvert(RNGDataFlow):
         return df
 
     def get_data(self):
-        x = 0
         while True:
-            x = x + 1
-            print("iter : ", x)
             yield get_mfccs_and_spectrogram(self.wav_file, isConverting=True)
         
 
@@ -56,10 +53,21 @@ class Net1DataFlow(DataFlow):
 
 class Net2DataFlow(DataFlow):
 
+    """
     def get_data(self):
         while True:
             wav_file = random.choice(self.wav_files)
             yield get_mfccs_and_spectrogram(wav_file)
+    """
+
+    def __init__(self, data_path, batch_size):
+        self.batch_size = batch_size
+        self.npz_files = glob.glob(data_path)
+
+    def get_data(self):
+        while True:
+            npz_file = random.choice(self.npz_files)
+            yield read_mfccs_and_spectrogram(npz_file)
 
 """
 def load_data(mode):
@@ -138,8 +146,8 @@ def get_mfccs_and_spectrogram(wav_file, trim=True, random_crop=False, isConverti
 
     # Load
     wav, _ = librosa.load(wav_file, sr=hp.default.sr)
-    print("wav's length : ", wav.shape[0])
-    
+    #print("wav.shape : ", wav.shape)
+
     # Trim
     if trim:
         wav, _ = librosa.effects.trim(wav, frame_length=hp.default.win_length, hop_length=hp.default.hop_length)
@@ -153,6 +161,7 @@ def get_mfccs_and_spectrogram(wav_file, trim=True, random_crop=False, isConverti
         length = int(hp.default.sr * hp.default.duration)
         wav = librosa.util.fix_length(wav, length)
 
+    #print("returning from get_mfccs_and_spectrogram...")
     return _get_mfcc_and_spec(wav, hp.default.preemphasis, hp.default.n_fft, hp.default.win_length, hp.default.hop_length)
 
 
@@ -178,9 +187,21 @@ def _get_mfcc_and_spec(wav, preemphasis_coeff, n_fft, win_length, hop_length):
     # Normalization (0 ~ 1)
     mag_db = normalize_0_1(mag_db, hp.default.max_db, hp.default.min_db)
     mel_db = normalize_0_1(mel_db, hp.default.max_db, hp.default.min_db)
-    #print(mfccs.T.shape)
 
     return mfccs.T, mag_db.T, mel_db.T  # (t, n_mfccs), (t, 1+n_fft/2), (t, n_mels)
+
+
+def read_mfcc_and_spectrogram(npz_file):
+    np_arrays = np.load(npz_file)
+
+    mfccs = np_arrays['mfccs']
+    mag_db = np_arrays['mag_db']
+    mel_db = np_arrays['mel_db']
+
+    np_arrays.close()
+
+    return mfccs, mag_db, mel_db
+    
 
 
 phns = ['h#', 'aa', 'ae', 'ah', 'ao', 'aw', 'ax', 'ax-h', 'axr', 'ay', 'b', 'bcl',

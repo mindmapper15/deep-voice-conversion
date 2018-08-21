@@ -49,7 +49,7 @@ train1:
 ---
 train2:
     # path
-    data_path: './datasets/arctic/slt/*.wav'
+    data_path: './datasets/arctic/slt/*.npz'
 
     # model
     hidden_units: 256  # alias: E
